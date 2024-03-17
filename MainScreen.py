@@ -1,5 +1,5 @@
 import pandas as pd
-from PyQt6.QtWidgets import QMainWindow, QTextEdit, QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem
+from PyQt6.QtWidgets import QMainWindow, QTextEdit, QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem
 from datetime import datetime
 import base64
 import time
@@ -14,24 +14,23 @@ class MainScreen(QMainWindow):
         self.today_day, self.today_month, self.today_year = self.today_date.split('-')
         self.initUI()
         self.edited_data = None
+        self.excel_data = None  # Initialize excel_data to None
+        self.sheet_names = []
+        self.current_sheet_index = 0
 
     def initUI(self):
         layout = QVBoxLayout()
 
-        self.setLayout(layout)
+        # Add a horizontal layout for the navbar buttons
+        navbar_layout = QHBoxLayout()
+        layout.addLayout(navbar_layout)
+
         self.setWindowTitle('Excel Viewer')
-
-        # Create a central widget
-        central_widget = QWidget(self)
-        self.setCentralWidget(central_widget)
-
-        # Create a layout for the central widget
-        layout = QVBoxLayout()
 
         # Create a button to open the file dialog
         self.openFileButton = QPushButton('Open Excel File')
         self.openFileButton.clicked.connect(self.openFile)
-        layout.addWidget(self.openFileButton)
+        navbar_layout.addWidget(self.openFileButton)
 
         # Create a table widget to display the data
         self.tableWidget = QTableWidget()
@@ -56,8 +55,15 @@ class MainScreen(QMainWindow):
         #layout.addWidget(start_button)
         layout.addWidget(self.downloadButton)
         layout.addWidget(close_button)
+
         # Set the layout for the central widget
+        # Create a central widget
+        central_widget = QWidget(self)
         central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+        
+        self.setLayout(layout)
+
         
 
 
@@ -72,30 +78,66 @@ class MainScreen(QMainWindow):
         if file_path:
             # Read the Excel file using pandas
             try:
-                df = pd.read_excel(file_path)
+                self.excel_data = pd.read_excel(file_path)
             except Exception as e:
                 log.info(f"{self.class_name} Error reading Excel file: {e}")
                 return
             
-            if df is not None:  # Check if data frame is not None
-                self.edited_data = df.copy()  # Store a copy of the original data for editing
+            if self.excel_data is not None:  # Check if data frame is not None
+                self.sheet_names = list(self.excel_data.keys())
 
-                # Clear the table widget
-                self.tableWidget.setRowCount(0)
-                self.tableWidget.setColumnCount(len(df.columns))
-                self.tableWidget.setHorizontalHeaderLabels(df.columns)
+                # Clear the existing navbar buttons
+                navbar_layout = self.findChild(QHBoxLayout)
+                while navbar_layout.count() > 1:
+                    item = navbar_layout.takeAt(1)
+                    if item is not None:
+                        item.widget().deleteLater()
 
-                # Populate the table widget with data from the DataFrame
-                for row in range(len(df)):
-                    self.tableWidget.insertRow(row)
-                    for col in range(len(df.columns)):
-                        item = QTableWidgetItem(str(df.iloc[row, col]))
-                        self.tableWidget.setItem(row, col, item)
+                # Create navbar buttons for each sheet
+                for sheet_name in self.sheet_names:
+                    button = QPushButton(sheet_name)
+                    button.clicked.connect(lambda _, name=sheet_name: self.load_sheet(name))
+                    navbar_layout.addWidget(button)
 
-                self.tableWidget.resizeColumnsToContents()
-                self.downloadButton.setEnabled(True)  # Enable the download button
+                self.load_sheet(self.sheet_names[0])  # Load the first sheet initially
+
         else:
             log.info(f"{self.class_name} - Failed to read Excel file.")
+
+    def load_sheet(self, sheet_name):
+        df = self.excel_data[sheet_name]
+
+        if isinstance(df, pd.DataFrame):
+            self.edited_data = df.copy()  # Store a copy of the original data for editing
+
+            # Clear the table widget
+            self.tableWidget.setRowCount(0)
+            self.tableWidget.setColumnCount(len(df.columns))
+            self.tableWidget.setHorizontalHeaderLabels(df.columns)
+
+            # Populate the table widget with data from the DataFrame
+            for row in range(len(df)):
+                self.tableWidget.insertRow(row)
+                for col in range(len(df.columns)):
+                    item = QTableWidgetItem(str(df.iloc[row, col]))
+                    self.tableWidget.setItem(row, col, item)
+
+        elif isinstance(df, pd.Series):
+            self.edited_data = df.to_frame()  # Convert Series to DataFrame
+
+            # Clear the table widget
+            self.tableWidget.setRowCount(0)
+            self.tableWidget.setColumnCount(1)
+            self.tableWidget.setHorizontalHeaderLabels([df.name or 'Column'])
+
+            # Populate the table widget with data from the Series
+            for row in range(len(df)):
+                item = QTableWidgetItem(str(df.iloc[row]))
+                self.tableWidget.insertRow(row)
+                self.tableWidget.setItem(row, 0, item)
+
+        self.tableWidget.resizeColumnsToContents()
+        self.downloadButton.setEnabled(True)  # Enable the download button
 
     def cellChanged(self, row, column):
         # Update the edited_data DataFrame with the new value
