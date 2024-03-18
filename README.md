@@ -51,7 +51,7 @@ Give some filename.
 
 
 ### Easy, right. Use this next time for your excel data simple operation view/edit/modify.
-## It's free and secure. You don't have to worry about privacy because so your data will never be stolen.
+## It's free and secure. You don't have to worry about privacy because your data will never be stolen.
 
 
 ### For non-developer an app will be shared soon to download it where you don't have to do developer stuff 😉
